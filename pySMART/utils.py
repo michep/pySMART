@@ -67,6 +67,12 @@ smartctl_type = {
 the corresponding smartctl interface type (ie: scsi, ata) as values.
 """
 
+def smartctl_cmd(smartctl_path = 'smartctl', sudo=False):
+    if sudo:
+        return 'sudo ' + smartctl_path
+    else:
+        return smartctl_path
+
 # Helper functions
 def admin():
     """Determine whether this scrpt is running with administrative privilege.
@@ -145,4 +151,4 @@ def verify_smartctl():
             "and may not detect all device types, or may parse device information "
             "incorrectly, if run without these permissions.")
 
-__all__ = ['admin', 'OS', 'pd_to_sd', 'rescan_device_busses', 'smartctl_type']
+__all__ = ['admin', 'OS', 'pd_to_sd', 'rescan_device_busses', 'smartctl_type', 'smartctl_cmd']

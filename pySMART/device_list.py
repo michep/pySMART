@@ -26,14 +26,14 @@ from subprocess import Popen, PIPE
 
 # pySMART module imports
 from .device import Device
-from .utils import OS, rescan_device_busses
+from .utils import OS, rescan_device_busses, smartctl_cmd
 
 
 class DeviceList(object):
     """
     Represents a list of all the storage devices connected to this computer.
     """
-    def __init__(self, init=True):
+    def __init__(self, init=True, smartctl_path='', sudo=False):
         """
         Instantiates and optionally initializes the `DeviceList`.
 
@@ -48,6 +48,9 @@ class DeviceList(object):
         **(list of `Device`):** Contains all storage devices detected during
         instantiation, as `Device` objects.
         """
+        self.smartctl_cmd = smartctl_cmd(smartctl_path, sudo)
+        self.smartctl_path = smartctl_path
+        self.sudo = sudo
         if init:
             self._initialize()
 
@@ -92,7 +95,7 @@ class DeviceList(object):
         # before scanning for disks
         if OS == 'Windows':
             rescan_device_busses()
-        cmd = Popen('/usr/bin/env smartctl --scan-open', shell=True,
+        cmd = Popen(self.smartctl_cmd + ' --scan-open', shell=True,
                     stdout=PIPE, stderr=PIPE)
         _stdout, _stderr = cmd.communicate()
         for line in _stdout.split('\n'):
@@ -108,11 +111,11 @@ class DeviceList(object):
                 # CSMI devices are explicitly of the 'csmi' type and do not
                 # require further disambiguation
                 interface = 'csmi'
-            elif line_parts[1] == '-d' and ',' in line_parts[2]:
+            elif line_parts[1] == '-d':
                 # More complex cases of device type, see smartctl manual for
                 # the details. Do not require further disambiguation
                 interface = line_parts[2]
-            self.devices.append(Device(name, interface=interface))
+            self.devices.append(Device(name, interface=interface, smartctl_path=self.smartctl_path, sudo=self.sudo))
 
         # Remove duplicates and unwanted devices (optical, etc.) from the list
         self._cleanup()

@@ -45,7 +45,7 @@ class Device(object):
     hard drive or DVD-ROM, and detected by smartmontools. Includes eSATA
     (considered SATA) but excludes other external devices (USB, Firewire).
     """
-    def __init__(self, path, interface=None):
+    def __init__(self, path, interface=None, smartctl_path='', sudo=False):
         """Instantiates and initializes the `pySMART.device.Device`."""
         assert (interface is None or interface.lower() in _interface_types or
                 ',' in interface)
@@ -126,9 +126,10 @@ class Device(object):
         SAS and SCSI devices, since ATA/SATA SMART attributes are manufacturer
         proprietary.
         """
+        self.smartctl_cmd = smartctl_cmd(smartctl_path, sudo)
         if self.name is None:
             warnings.warn("\nDevice '{0}' does not exist! "
-                          "This object should be destroyed.".format(name))
+                          "This object should be destroyed.".format(self.name))
             return
         # If no interface type was provided, scan for the device
         elif self.interface is None:
@@ -140,7 +141,7 @@ class Device(object):
                 self._classify()
             else:
                 warnings.warn("\nDevice '{0}' does not exist! "
-                              "This object should be destroyed.".format(name))
+                              "This object should be destroyed.".format(self.name))
                 return
         # If a valid device was detected, populate its information
         if self.interface is not None:
@@ -414,14 +415,19 @@ class Device(object):
                         self.assessment = 'WARN'
 
     def _cmd_all_with_type(self):
-        cmd = Popen('/usr/bin/env smartctl -d {0} -a {1}'.format(
-            self._get_device_type(), self.path), shell=True,
-            stdout=PIPE, stderr=PIPE)
+        cmd = Popen(
+            self.smartctl_cmd + ' -d {0} -i -A -H {1}'.format(
+                self._get_device_type(),
+                self.path
+            ),
+            shell=True,
+            stdout=PIPE, stderr=PIPE
+        )
         return cmd.communicate()
 
     def _cmd_all(self):
         cmd = Popen(
-            '/usr/bin/env smartctl -a {0}'.format(self.path),
+            self.smartctl_cmd + ' -i -A- H {0}'.format(self.path),
             shell=True,
             stdout=PIPE,
             stderr=PIPE,
@@ -430,7 +436,7 @@ class Device(object):
 
     def _cmd_power_on_scan(self):
         cmd = Popen(
-            'smartctl -d scsi -l background {0}'.format(self.path),
+            self.smartctl_cmd + ' -d scsi -l background {0}'.format(self.path),
             shell=True,
             stdout=PIPE,
             stderr=PIPE,
@@ -439,7 +445,7 @@ class Device(object):
 
     def _cmd_run_test(self, test_type):
         cmd = Popen(
-            'smartctl -d {0} -t {1} {2}'.format(
+            self.smartctl_cmd + ' -d {0} -t {1} {2}'.format(
                 self._get_device_type(),
                 test_type,
                 self.path,
@@ -452,7 +458,7 @@ class Device(object):
 
     def _cmd_get_capabilities(self):
         cmd = Popen(
-            'smartctl -d {0} -c {1}'.format(
+            self.smartctl_cmd + ' -d {0} -c {1}'.format(
                 self._get_device_type(),
                 self.path
             ),
@@ -464,8 +470,9 @@ class Device(object):
 
     def _cmd_sataphy(self, test):
         cmd = Popen(
-            'smartctl -d {0} -l sataphy {1}'.format(
-                smartctl_type[test], self.path
+            self.smartctl_cmd + ' -d {0} -l sataphy {1}'.format(
+                smartctl_type[test],
+                self.path
             ),
             shell=True,
             stdout=PIPE,
@@ -475,7 +482,7 @@ class Device(object):
 
     def _cmd_sasphy(self):
         cmd = Popen(
-            'smartctl -d scsi -l sasphy {0}'.format(self.path),
+            self.smartctl_cmd + ' -d scsi -l sasphy {0}'.format(self.path),
             shell=True,
             stdout=PIPE,
             stderr=PIPE
@@ -484,7 +491,7 @@ class Device(object):
 
     def _cmd_scsi_all(self):
         cmd = Popen(
-            'smartctl -d scsi -a {0}'.format(self.path),
+            self.smartctl_cmd + ' -d scsi -a {0}'.format(self.path),
             shell=True,
             stdout=PIPE,
             stderr=PIPE,
@@ -493,7 +500,7 @@ class Device(object):
 
     def _cmd_scan_open(self, grep_cmd_name):
         cmd = Popen(
-            '/usr/bin/env smartctl --scan-open | {0} "{1}"'.format(
+            self.smartctl_cmd + ' --scan-open | {0} "{1}"'.format(
                 grep_cmd_name,
                 self.name,
             ),
