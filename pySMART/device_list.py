@@ -23,6 +23,8 @@ This class has no public methods.  All interaction should be through the
 """
 # Python built-ins
 from subprocess import Popen, PIPE
+import multiprocessing.dummy as mp
+from functools import partial
 
 # pySMART module imports
 from .device import Device
@@ -73,6 +75,9 @@ class DeviceList(object):
         to_delete = []
         # Enumerate the list to get tuples containing indeces and values
         for index, device in enumerate(self.devices):
+            if device == None:
+                to_delete.append(index)
+                continue
             if device.interface == 'csmi':
                 for otherindex, otherdevice in enumerate(self.devices):
                     if (otherdevice.interface == 'ata' or
@@ -98,29 +103,34 @@ class DeviceList(object):
         cmd = Popen(self.smartctl_cmd + ' --scan-open', shell=True,
                     stdout=PIPE, stderr=PIPE)
         _stdout, _stderr = cmd.communicate()
-        for line in _stdout.split('\n'):
-            if 'failed:' in line or line == '':
-                continue
 
-            line_parts = line.split(' ')
-            name = line_parts[0]
-            # By default device types will be disambiguated by Device.__init__
-            interface = None
-
-            if name[0:4] == 'csmi':
-                # CSMI devices are explicitly of the 'csmi' type and do not
-                # require further disambiguation
-                interface = 'csmi'
-            elif line_parts[1] == '-d':
-                # More complex cases of device type, see smartctl manual for
-                # the details. Do not require further disambiguation
-                interface = line_parts[2]
-            self.devices.append(Device(name, interface=interface, smartctl_path=self.smartctl_path, sudo=self.sudo))
+        pool = mp.Pool()
+        sub_part = partial(sub, smartctl_path = self.smartctl_path, sudo = self.sudo)
+        self.devices = pool.map(sub_part, _stdout.split('\n'))
 
         # Remove duplicates and unwanted devices (optical, etc.) from the list
         self._cleanup()
         # Sort the list alphabetically by device name
         self.devices.sort(key=lambda device: device.name)
 
+
+def sub(line, smartctl_path, sudo):
+    if 'failed:' in line or line == '':
+        return None
+
+    line_parts = line.split(' ')
+    name = line_parts[0]
+    # By default device types will be disambiguated by Device.__init__
+    interface = None
+
+    if name[0:4] == 'csmi':
+        # CSMI devices are explicitly of the 'csmi' type and do not
+        # require further disambiguation
+        interface = 'csmi'
+    elif line_parts[1] == '-d':
+        # More complex cases of device type, see smartctl manual for
+        # the details. Do not require further disambiguation
+        interface = line_parts[2]
+    return Device(name, interface=interface, smartctl_path=smartctl_path, sudo=sudo)
 
 __all__ = ['DeviceList']
