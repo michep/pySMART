@@ -107,6 +107,8 @@ class DeviceList(object):
         pool = mp.Pool()
         sub_part = partial(sub, smartctl_path = self.smartctl_path, sudo = self.sudo)
         self.devices = pool.map(sub_part, _stdout.split('\n'))
+        pool.close()
+        pool.join()
 
         # Remove duplicates and unwanted devices (optical, etc.) from the list
         self._cleanup()
